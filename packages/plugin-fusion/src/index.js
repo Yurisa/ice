@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { upperFirst, camelCase } = require('lodash');
+const { getWebpackConfig, getBabelConfig } = require('build-scripts-config');
 const WebpackPluginImport = require('webpack-plugin-import');
 const CheckIceComponentsDepsPlugin = require('./webpackPlugins/checkIceComponentsDepPlugin');
 const AppendStyleWebpackPlugin = require('./webpackPlugins/appendStyleWebpackPlugin');
@@ -17,6 +18,8 @@ function normalizeEntry(entry, preparedChunks) {
 
   return Object.keys(entry).concat(preparedName);
 }
+
+const EXCLUDE_REGX = /node_modules/;
 
 module.exports = async ({ onGetWebpackConfig, log, context }, plugionOptions = {}) => {
   const { themePackage, themeConfig, nextLibDir = 'es', usePx2Vw = false, style = true, uniteNextLib, externalNext, importOptions = {} } = plugionOptions;
@@ -152,7 +155,7 @@ module.exports = async ({ onGetWebpackConfig, log, context }, plugionOptions = {
         },
       };
       config.plugin('AppendStyleWebpackPlugin').use(AppendStyleWebpackPlugin, [appendStylePluginOption]);
-    }
+    }    
 
     // 2. 组件（包含业务组件）按需加载&样式自动引入
     // babel-plugin-import: 基础组件
@@ -174,7 +177,9 @@ module.exports = async ({ onGetWebpackConfig, log, context }, plugionOptions = {
         config.module
           .rule(rule)
           .use('babel-loader')
+          .loader(require.resolve('babel-loader'))
           .tap((options) => {
+            options.plugins.push(require.resolve('babel-plugin-transform-jsx-px2vw'));
             const plugins = options.plugins.concat(
               importConfigs.map((itemConfig) => {
                 return [require.resolve('babel-plugin-import'), itemConfig, itemConfig.libraryName];
@@ -182,7 +187,12 @@ module.exports = async ({ onGetWebpackConfig, log, context }, plugionOptions = {
             );
             options.plugins = plugins;
             return options;
-          });
+          }).end()
+          .use('ts-loader')
+          .loader(require.resolve('ts-loader'))
+          .options({ transpileOnly: true, compilerOptions: {
+            jsx: 'preserve'
+          }});;
       });
     }
 
